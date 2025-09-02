@@ -8,8 +8,8 @@ from datetime import date
 if "transactions" not in st.session_state:
     st.session_state["transactions"] = []
 
-if "prev_tx_type" not in st.session_state:
-    st.session_state.prev_tx_type = "Income"  # default
+if "edit_index" not in st.session_state:
+    st.session_state["edit_index"] = None
 
 # -------------------------
 # Helper functions
@@ -89,36 +89,29 @@ elif page == "Transactions":
     st.title("💸 Add Transaction")
     
     with st.form("transaction_form"):
-        tx_type = st.selectbox("Type", ["Income", "Expense"])
-
-        # Reset category if type changed
-        if tx_type != st.session_state.prev_tx_type:
-            if tx_type == "Expense":
-                st.session_state["expense_category"] = "Rent"
-            else:
-                st.session_state["income_category"] = "Sales"
-            st.session_state.prev_tx_type = tx_type
-
+        tx_type = st.selectbox("Type", ["Income", "Expense"], key="tx_type_select")
         description = st.text_input("Description")
         amount = st.number_input("Amount", min_value=0.0, step=0.01)
         tx_date = st.date_input("Date", value=date.today())
-        
-        # Category based on type with separate keys
+
+        # Separate containers for Income and Expense categories
         if tx_type == "Expense":
-            category = st.selectbox(
-                "Category",
-                ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
-                key="expense_category"
-            )
-            subcategory = st.text_input("Subcategory (optional)", key="expense_subcategory")
-        else:  # Income
-            category = st.selectbox(
-                "Category",
-                ["Sales", "Services", "Other"],
-                key="income_category"
-            )
-            subcategory = st.text_input("Subcategory (optional)", key="income_subcategory")
-        
+            with st.container():
+                category = st.selectbox(
+                    "Category",
+                    ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
+                    key="expense_category"
+                )
+                subcategory = st.text_input("Subcategory (optional)", key="expense_subcategory")
+        else:
+            with st.container():
+                category = st.selectbox(
+                    "Category",
+                    ["Sales", "Services", "Other"],
+                    key="income_category"
+                )
+                subcategory = st.text_input("Subcategory (optional)", key="income_subcategory")
+
         submitted = st.form_submit_button("Add Transaction")
         if submitted:
             if not description:
@@ -130,8 +123,8 @@ elif page == "Transactions":
                 st.success(f"{tx_type} added: {description} (${amount:.2f})")
 
     st.subheader("Filter Transactions")
-    filter_type = st.selectbox("Type Filter", ["All", "Income", "Expense"])
-    
+    filter_type = st.selectbox("Type Filter", ["All", "Income", "Expense"], key="filter_type")
+
     # Filter categories depend on type
     if filter_type == "Income":
         filter_categories = st.multiselect(
@@ -148,17 +141,17 @@ elif page == "Transactions":
             "Category Filter",
             ["Rent", "Utilities", "Marketing", "Payroll", "Sales", "Services", "Other"]
         )
-    
+
     start_date = st.date_input("Start Date", value=date(2020, 1, 1))
     end_date = st.date_input("End Date", value=date.today())
 
-    filt_type = None if filter_type=="All" else filter_type
+    filt_type = None if filter_type == "All" else filter_type
     filt_cat = filter_categories if filter_categories else None
     filtered_df = filter_transactions(filt_type, filt_cat, (start_date, end_date))
 
     if not filtered_df.empty:
         st.dataframe(filtered_df.sort_values("Date", ascending=False))
-        
+
         st.subheader("Edit/Delete Transactions")
         for idx, row in filtered_df.iterrows():
             cols = st.columns([3, 1, 1])
@@ -172,31 +165,33 @@ elif page == "Transactions":
 # -------------------------
 # Edit transaction modal
 # -------------------------
-if "edit_index" in st.session_state:
+if st.session_state.edit_index is not None:
     idx = st.session_state.edit_index
     tx = st.session_state.transactions[idx]
     st.subheader("✏️ Edit Transaction")
     with st.form("edit_form"):
-        tx_type = st.selectbox("Type", ["Income", "Expense"], index=0 if tx["Type"]=="Income" else 1)
-        description = st.text_input("Description", tx["Description"])
-        amount = st.number_input("Amount", min_value=0.0, step=0.01, value=tx["Amount"])
-        tx_date = st.date_input("Date", value=tx["Date"])
-        
+        tx_type = st.selectbox("Type", ["Income", "Expense"], index=0 if tx["Type"]=="Income" else 1, key="edit_tx_type")
+        description = st.text_input("Description", tx["Description"], key="edit_description")
+        amount = st.number_input("Amount", min_value=0.0, step=0.01, value=tx["Amount"], key="edit_amount")
+        tx_date = st.date_input("Date", value=tx["Date"], key="edit_date")
+
         if tx_type == "Expense":
             category = st.selectbox(
                 "Category",
                 ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
-                index=["Rent", "Utilities", "Marketing", "Payroll", "Other"].index(tx["Category"])
+                index=["Rent", "Utilities", "Marketing", "Payroll", "Other"].index(tx["Category"]),
+                key="edit_expense_category"
             )
             subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_expense_sub")
         else:
             category = st.selectbox(
                 "Category",
                 ["Sales", "Services", "Other"],
-                index=["Sales", "Services", "Other"].index(tx["Category"])
+                index=["Sales", "Services", "Other"].index(tx["Category"]),
+                key="edit_income_category"
             )
-            subcategory = st.text_input("Subcategory (optional)", "", key="edit_income_sub")
-        
+            subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_income_sub")
+
         submitted = st.form_submit_button("Save Changes")
         if submitted:
             edit_transaction(idx, {
@@ -208,5 +203,5 @@ if "edit_index" in st.session_state:
                 "Date": tx_date
             })
             st.success("Transaction updated!")
-            del st.session_state.edit_index
+            st.session_state.edit_index = None
             st.experimental_rerun()
