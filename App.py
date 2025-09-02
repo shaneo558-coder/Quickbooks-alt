@@ -219,7 +219,7 @@ elif page == "Reports":
         income_by_cat = df[df['type'] == 'Income'].groupby('category')['amount'].sum()
         if not income_by_cat.empty:
             fig3, ax3 = plt.subplots()
-            income_by_cat.plot(kind='pie', ax3, autopct='%1.1f%%')
+            income_by_cat.plot(kind='pie', ax=ax3, autopct='%1.1f%%')
             ax3.set_title("Income by Category")
             st.pyplot(fig3)
 
