@@ -91,11 +91,11 @@ elif page == "Transactions":
         amount = st.number_input("Amount", min_value=0.0, step=0.01)
         tx_date = st.date_input("Date", value=date.today())
         
-        # Categories
+        # Corrected Categories
         if tx_type == "Expense":
-            category = st.selectbox("Category", ["Office", "Travel", "Supplies", "Utilities", "Marketing", "Payroll", "Other"])
+            category = st.selectbox("Category", ["Rent", "Utilities", "Marketing", "Payroll", "Other"])
             subcategory = st.text_input("Subcategory (optional)")
-        else:
+        else:  # Income
             category = st.selectbox("Category", ["Sales", "Services", "Other"])
             subcategory = ""
         
@@ -114,7 +114,7 @@ elif page == "Transactions":
     filter_type = st.selectbox("Type Filter", ["All", "Income", "Expense"])
     filter_categories = st.multiselect(
         "Category Filter",
-        ["Office", "Travel", "Supplies", "Utilities", "Marketing", "Payroll", "Sales", "Services", "Other"]
+        ["Rent", "Utilities", "Marketing", "Payroll", "Sales", "Services", "Other"]
     )
     start_date = st.date_input("Start Date", value=date(2020, 1, 1))
     end_date = st.date_input("End Date", value=date.today())
@@ -150,10 +150,18 @@ if "edit_index" in st.session_state:
         tx_date = st.date_input("Date", value=tx["Date"])
         
         if tx_type == "Expense":
-            category = st.selectbox("Category", ["Office", "Travel", "Supplies", "Utilities", "Marketing", "Payroll", "Other"], index=["Office", "Travel", "Supplies", "Utilities", "Marketing", "Payroll", "Other"].index(tx["Category"]))
+            category = st.selectbox(
+                "Category",
+                ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
+                index=["Rent", "Utilities", "Marketing", "Payroll", "Other"].index(tx["Category"])
+            )
             subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""))
         else:
-            category = st.selectbox("Category", ["Sales", "Services", "Other"], index=["Sales", "Services", "Other"].index(tx["Category"]))
+            category = st.selectbox(
+                "Category",
+                ["Sales", "Services", "Other"],
+                index=["Sales", "Services", "Other"].index(tx["Category"])
+            )
             subcategory = ""
         
         submitted = st.form_submit_button("Save Changes")
