@@ -2,32 +2,36 @@
 # A simple MVP for a service-based accounting app using Streamlit.
 # Focuses on easy expense and income tracking with a clean, Apple-like UI.
 # Uses SQLite for data persistence.
-# Automatically installs dependencies if missing.
-# Run with: streamlit run App.py
+# Automatically installs dependencies if missing, optimized for Python 3.13.
+# Run with: python3.13 -m streamlit run App.py
 
 import subprocess
 import sys
 import importlib.util
 
 # Function to check and install dependencies
-def install_package(package):
+def install_package(package, use_pre=False):
     try:
         # Check if package is installed
         if importlib.util.find_spec(package) is None:
             print(f"Installing {package}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+            cmd = [sys.executable, "-m", "pip", "install"]
+            if use_pre:
+                cmd.append("--pre")  # Allow pre-release versions for Python 3.13
+            cmd.append(package)
+            subprocess.check_call(cmd)
             print(f"{package} installed successfully.")
         else:
             print(f"{package} is already installed.")
     except subprocess.CalledProcessError:
-        print(f"Error: Failed to install {package}. Please install it manually with 'pip install {package}'.")
+        print(f"Error: Failed to install {package}. Try manually: 'python3.13 -m pip install {package}{' --pre' if use_pre else ''}'.")
     except Exception as e:
         print(f"Error checking/installing {package}: {str(e)}")
 
-# Install required packages
-dependencies = ["streamlit", "pandas", "matplotlib"]
-for dep in dependencies:
-    install_package(dep)
+# Install required packages, with --pre for matplotlib due to Python 3.13
+dependencies = [("streamlit", False), ("pandas", False), ("matplotlib", True)]
+for package, use_pre in dependencies:
+    install_package(package, use_pre)
 
 # Now import the required libraries
 import streamlit as st
@@ -215,11 +219,12 @@ elif page == "Reports":
         income_by_cat = df[df['type'] == 'Income'].groupby('category')['amount'].sum()
         if not income_by_cat.empty:
             fig3, ax3 = plt.subplots()
-            income_by_cat.plot(kind='pie', ax=ax3, autopct='%1.1f%%')
+            income_by_cat.plot(kind='pie', ax3, autopct='%1.1f%%')
             ax3.set_title("Income by Category")
             st.pyplot(fig3)
 
 # Note: For deployment (e.g., Streamlit Cloud), create a requirements.txt file with:
 # streamlit
 # pandas
-# matplotlib
+# matplotlib>=3.9.2
+# Also add runtime.txt with: python-3.13
