@@ -2,31 +2,37 @@
 # A simple MVP for a service-based accounting app using Streamlit.
 # Focuses on easy expense and income tracking with a clean, Apple-like UI.
 # Uses SQLite for data persistence.
-# Automatically installs dependencies if missing, optimized for Python 3.13.
+# Automatically installs dependencies with enhanced error handling for Python 3.13.
 # Run with: python3.13 -m streamlit run App.py
 
 import subprocess
 import sys
 import importlib.util
+import logging
+
+# Set up logging to diagnose installation issues
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Function to check and install dependencies
 def install_package(package, use_pre=False):
     try:
         # Check if package is installed
         if importlib.util.find_spec(package) is None:
-            print(f"Installing {package}...")
-            cmd = [sys.executable, "-m", "pip", "install"]
+            logger.info(f"Installing {package}...")
+            cmd = [sys.executable, "-m", "pip", "install", "--verbose"]
             if use_pre:
                 cmd.append("--pre")  # Allow pre-release versions for Python 3.13
             cmd.append(package)
-            subprocess.check_call(cmd)
-            print(f"{package} installed successfully.")
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            logger.info(f"{package} installed successfully:\n{result.stdout}")
         else:
-            print(f"{package} is already installed.")
-    except subprocess.CalledProcessError:
-        print(f"Error: Failed to install {package}. Try manually: 'python3.13 -m pip install {package}{' --pre' if use_pre else ''}'.")
+            logger.info(f"{package} is already installed.")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to install {package}. Error:\n{e.stderr}")
+        logger.error(f"Try manually: 'python3.13 -m pip install {package}{' --pre' if use_pre else ''}'")
     except Exception as e:
-        print(f"Error checking/installing {package}: {str(e)}")
+        logger.error(f"Error checking/installing {package}: {str(e)}")
 
 # Install required packages, with --pre for matplotlib due to Python 3.13
 dependencies = [("streamlit", False), ("pandas", False), ("matplotlib", True)]
@@ -34,11 +40,15 @@ for package, use_pre in dependencies:
     install_package(package, use_pre)
 
 # Now import the required libraries
-import streamlit as st
-import pandas as pd
-import sqlite3
-from datetime import datetime
-import matplotlib.pyplot as plt
+try:
+    import streamlit as st
+    import pandas as pd
+    import sqlite3
+    from datetime import datetime
+    import matplotlib.pyplot as plt
+except ModuleNotFoundError as e:
+    logger.error(f"Import failed: {str(e)}. Ensure dependencies are installed.")
+    raise
 
 # Database setup
 DB_NAME = "accounting.db"
