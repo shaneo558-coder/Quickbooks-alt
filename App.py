@@ -2,8 +2,34 @@
 # A simple MVP for a service-based accounting app using Streamlit.
 # Focuses on easy expense and income tracking with a clean, Apple-like UI.
 # Uses SQLite for data persistence.
+# Automatically installs dependencies if missing.
 # Run with: streamlit run App.py
 
+import subprocess
+import sys
+import importlib.util
+
+# Function to check and install dependencies
+def install_package(package):
+    try:
+        # Check if package is installed
+        if importlib.util.find_spec(package) is None:
+            print(f"Installing {package}...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+            print(f"{package} installed successfully.")
+        else:
+            print(f"{package} is already installed.")
+    except subprocess.CalledProcessError:
+        print(f"Error: Failed to install {package}. Please install it manually with 'pip install {package}'.")
+    except Exception as e:
+        print(f"Error checking/installing {package}: {str(e)}")
+
+# Install required packages
+dependencies = ["streamlit", "pandas", "matplotlib"]
+for dep in dependencies:
+    install_package(dep)
+
+# Now import the required libraries
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -192,3 +218,8 @@ elif page == "Reports":
             income_by_cat.plot(kind='pie', ax=ax3, autopct='%1.1f%%')
             ax3.set_title("Income by Category")
             st.pyplot(fig3)
+
+# Note: For deployment (e.g., Streamlit Cloud), create a requirements.txt file with:
+# streamlit
+# pandas
+# matplotlib
