@@ -2,7 +2,8 @@
 # A simple MVP for a service-based accounting app using Streamlit.
 # Focuses on easy expense and income tracking with a clean, Apple-like UI.
 # Uses SQLite for data persistence.
-# Automatically installs dependencies with enhanced error handling for Python 3.13.
+# Removed matplotlib dependency and Reports section to avoid ModuleNotFoundError.
+# Automatically installs streamlit and pandas, optimized for Python 3.13.
 # Run with: python3.13 -m streamlit run App.py
 
 import subprocess
@@ -15,29 +16,26 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Function to check and install dependencies
-def install_package(package, use_pre=False):
+def install_package(package):
     try:
         # Check if package is installed
         if importlib.util.find_spec(package) is None:
             logger.info(f"Installing {package}...")
-            cmd = [sys.executable, "-m", "pip", "install", "--verbose"]
-            if use_pre:
-                cmd.append("--pre")  # Allow pre-release versions for Python 3.13
-            cmd.append(package)
+            cmd = [sys.executable, "-m", "pip", "install", "--verbose", package]
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             logger.info(f"{package} installed successfully:\n{result.stdout}")
         else:
             logger.info(f"{package} is already installed.")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to install {package}. Error:\n{e.stderr}")
-        logger.error(f"Try manually: 'python3.13 -m pip install {package}{' --pre' if use_pre else ''}'")
+        logger.error(f"Try manually: 'python3.13 -m pip install {package}'")
     except Exception as e:
         logger.error(f"Error checking/installing {package}: {str(e)}")
 
-# Install required packages, with --pre for matplotlib due to Python 3.13
-dependencies = [("streamlit", False), ("pandas", False), ("matplotlib", True)]
-for package, use_pre in dependencies:
-    install_package(package, use_pre)
+# Install required packages (no matplotlib)
+dependencies = ["streamlit", "pandas"]
+for package in dependencies:
+    install_package(package)
 
 # Now import the required libraries
 try:
@@ -45,7 +43,6 @@ try:
     import pandas as pd
     import sqlite3
     from datetime import datetime
-    import matplotlib.pyplot as plt
 except ModuleNotFoundError as e:
     logger.error(f"Import failed: {str(e)}. Ensure dependencies are installed.")
     raise
@@ -145,7 +142,7 @@ st.markdown("""
 
 # Sidebar for navigation
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Dashboard", "Add Income", "Add Expense", "Transactions", "Reports"])
+page = st.sidebar.radio("Go to", ["Dashboard", "Add Income", "Add Expense", "Transactions"])
 
 if page == "Dashboard":
     st.title("Dashboard")
@@ -196,45 +193,7 @@ elif page == "Transactions":
     else:
         st.info("No transactions yet.")
 
-elif page == "Reports":
-    st.title("Reports")
-    df = get_transactions()
-    if df.empty:
-        st.info("No data available for reports.")
-    else:
-        df['date'] = pd.to_datetime(df['date'])
-        df['month'] = df['date'].dt.to_period('M')
-        
-        monthly_summary = df.groupby(['month', 'type'])['amount'].sum().unstack().fillna(0)
-        monthly_summary['balance'] = monthly_summary.get('Income', 0) - monthly_summary.get('Expense', 0)
-        
-        st.subheader("Monthly Summary")
-        st.dataframe(monthly_summary.style.format("${:.2f}"))
-        
-        st.subheader("Income vs Expenses")
-        fig, ax = plt.subplots()
-        monthly_summary[['Income', 'Expense']].plot(kind='bar', ax=ax)
-        ax.set_ylabel("Amount ($)")
-        ax.set_title("Monthly Income and Expenses")
-        st.pyplot(fig)
-        
-        st.subheader("Category Breakdown")
-        expense_by_cat = df[df['type'] == 'Expense'].groupby('category')['amount'].sum()
-        if not expense_by_cat.empty:
-            fig2, ax2 = plt.subplots()
-            expense_by_cat.plot(kind='pie', ax=ax2, autopct='%1.1f%%')
-            ax2.set_title("Expenses by Category")
-            st.pyplot(fig2)
-        
-        income_by_cat = df[df['type'] == 'Income'].groupby('category')['amount'].sum()
-        if not income_by_cat.empty:
-            fig3, ax3 = plt.subplots()
-            income_by_cat.plot(kind='pie', ax=ax3, autopct='%1.1f%%')
-            ax3.set_title("Income by Category")
-            st.pyplot(fig3)
-
 # Note: For deployment (e.g., Streamlit Cloud), create a requirements.txt file with:
 # streamlit
 # pandas
-# matplotlib>=3.9.2
 # Also add runtime.txt with: python-3.13
