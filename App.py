@@ -87,45 +87,63 @@ if page == "Dashboard":
 # -------------------------
 elif page == "Transactions":
     st.title("💸 Add Transaction")
-    
-    with st.form("transaction_form"):
-        tx_type = st.selectbox("Type", ["Income", "Expense"], key="tx_type_select")
-        description = st.text_input("Description")
-        amount = st.number_input("Amount", min_value=0.0, step=0.01)
-        tx_date = st.date_input("Date", value=date.today())
 
-        # Placeholder for dynamic category/subcategory input
-        input_placeholder = st.empty()
-        with input_placeholder.container():
-            if tx_type == "Expense":
-                category = st.selectbox(
-                    "Category",
-                    ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
-                    key="expense_category"
-                )
-                subcategory = st.text_input("Subcategory (optional)", key="expense_subcategory")
-            else:
-                category = st.selectbox(
-                    "Category",
-                    ["Sales", "Services", "Other"],
-                    key="income_category"
-                )
-                subcategory = st.text_input("Subcategory (optional)", key="income_subcategory")
+    tx_type = st.selectbox("Type", ["Income", "Expense"], key="tx_type_select")
 
-        submitted = st.form_submit_button("Add Transaction")
-        if submitted:
-            if not description:
-                st.error("Description is required.")
-            elif amount <= 0:
-                st.error("Amount must be greater than 0.")
-            else:
-                add_transaction(tx_type, description, amount, category, subcategory, tx_date)
-                st.success(f"{tx_type} added: {description} (${amount:.2f})")
+    # -------------------------
+    # Expense Form
+    # -------------------------
+    if tx_type == "Expense":
+        with st.form("expense_form"):
+            description = st.text_input("Description", key="expense_desc")
+            amount = st.number_input("Amount", min_value=0.0, step=0.01, key="expense_amount")
+            tx_date = st.date_input("Date", value=date.today(), key="expense_date")
+            category = st.selectbox(
+                "Category",
+                ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
+                key="expense_category"
+            )
+            subcategory = st.text_input("Subcategory (optional)", key="expense_subcategory")
+            submitted = st.form_submit_button("Add Expense")
+            if submitted:
+                if not description:
+                    st.error("Description is required.")
+                elif amount <= 0:
+                    st.error("Amount must be greater than 0.")
+                else:
+                    add_transaction("Expense", description, amount, category, subcategory, tx_date)
+                    st.success(f"Expense added: {description} (${amount:.2f})")
 
+    # -------------------------
+    # Income Form
+    # -------------------------
+    else:
+        with st.form("income_form"):
+            description = st.text_input("Description", key="income_desc")
+            amount = st.number_input("Amount", min_value=0.0, step=0.01, key="income_amount")
+            tx_date = st.date_input("Date", value=date.today(), key="income_date")
+            category = st.selectbox(
+                "Category",
+                ["Sales", "Services", "Other"],
+                key="income_category"
+            )
+            subcategory = st.text_input("Subcategory (optional)", key="income_subcategory")
+            submitted = st.form_submit_button("Add Income")
+            if submitted:
+                if not description:
+                    st.error("Description is required.")
+                elif amount <= 0:
+                    st.error("Amount must be greater than 0.")
+                else:
+                    add_transaction("Income", description, amount, category, subcategory, tx_date)
+                    st.success(f"Income added: {description} (${amount:.2f})")
+
+    # -------------------------
+    # Filter Transactions
+    # -------------------------
     st.subheader("Filter Transactions")
     filter_type = st.selectbox("Type Filter", ["All", "Income", "Expense"], key="filter_type")
 
-    # Filter categories based on type
     if filter_type == "Income":
         filter_categories = st.multiselect(
             "Category Filter",
@@ -175,25 +193,22 @@ if st.session_state.edit_index is not None:
         amount = st.number_input("Amount", min_value=0.0, step=0.01, value=tx["Amount"], key="edit_amount")
         tx_date = st.date_input("Date", value=tx["Date"], key="edit_date")
 
-        # Dynamic category/subcategory in edit form
-        edit_placeholder = st.empty()
-        with edit_placeholder.container():
-            if tx_type == "Expense":
-                category = st.selectbox(
-                    "Category",
-                    ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
-                    index=["Rent", "Utilities", "Marketing", "Payroll", "Other"].index(tx["Category"]),
-                    key="edit_expense_category"
-                )
-                subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_expense_sub")
-            else:
-                category = st.selectbox(
-                    "Category",
-                    ["Sales", "Services", "Other"],
-                    index=["Sales", "Services", "Other"].index(tx["Category"]),
-                    key="edit_income_category"
-                )
-                subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_income_sub")
+        if tx_type == "Expense":
+            category = st.selectbox(
+                "Category",
+                ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
+                index=["Rent", "Utilities", "Marketing", "Payroll", "Other"].index(tx["Category"]),
+                key="edit_expense_category"
+            )
+            subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_expense_sub")
+        else:
+            category = st.selectbox(
+                "Category",
+                ["Sales", "Services", "Other"],
+                index=["Sales", "Services", "Other"].index(tx["Category"]),
+                key="edit_income_category"
+            )
+            subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_income_sub")
 
         submitted = st.form_submit_button("Save Changes")
         if submitted:
