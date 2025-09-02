@@ -8,6 +8,9 @@ from datetime import date
 if "transactions" not in st.session_state:
     st.session_state["transactions"] = []
 
+if "prev_tx_type" not in st.session_state:
+    st.session_state.prev_tx_type = "Income"  # default
+
 # -------------------------
 # Helper functions
 # -------------------------
@@ -87,28 +90,36 @@ elif page == "Transactions":
     
     with st.form("transaction_form"):
         tx_type = st.selectbox("Type", ["Income", "Expense"])
+
+        # Reset category if type changed
+        if tx_type != st.session_state.prev_tx_type:
+            if tx_type == "Expense":
+                st.session_state["expense_category"] = "Rent"
+            else:
+                st.session_state["income_category"] = "Sales"
+            st.session_state.prev_tx_type = tx_type
+
         description = st.text_input("Description")
         amount = st.number_input("Amount", min_value=0.0, step=0.01)
         tx_date = st.date_input("Date", value=date.today())
         
-        # Corrected: Separate categories and unique keys
+        # Category based on type with separate keys
         if tx_type == "Expense":
             category = st.selectbox(
-                "Category", 
+                "Category",
                 ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
                 key="expense_category"
             )
             subcategory = st.text_input("Subcategory (optional)", key="expense_subcategory")
         else:  # Income
             category = st.selectbox(
-                "Category", 
+                "Category",
                 ["Sales", "Services", "Other"],
                 key="income_category"
             )
             subcategory = st.text_input("Subcategory (optional)", key="income_subcategory")
         
         submitted = st.form_submit_button("Add Transaction")
-        
         if submitted:
             if not description:
                 st.error("Description is required.")
