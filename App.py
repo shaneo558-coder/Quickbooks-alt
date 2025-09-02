@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 
 # -------------------------
 # Initialize session storage
@@ -11,24 +11,31 @@ if "transactions" not in st.session_state:
 # -------------------------
 # Helper Functions
 # -------------------------
-def add_transaction(tx_type, description, amount, category, subcategory, tx_date):
+def add_transaction(tx_type, description, amount, category, subcategory, tx_date, recurring=False):
     st.session_state.transactions.append({
         "Type": tx_type,
         "Description": description,
         "Amount": amount,
         "Category": category,
         "Subcategory": subcategory,
-        "Date": tx_date
+        "Date": tx_date,
+        "Recurring": recurring
     })
 
-def filter_transactions(tx_type=None, category=None, date_range=None):
+def edit_transaction(index, tx):
+    st.session_state.transactions[index] = tx
+
+def delete_transaction(index):
+    st.session_state.transactions.pop(index)
+
+def filter_transactions(tx_type=None, categories=None, date_range=None):
     df = pd.DataFrame(st.session_state.transactions)
     if df.empty:
         return df
     if tx_type:
         df = df[df["Type"] == tx_type]
-    if category:
-        df = df[df["Category"] == category]
+    if categories:
+        df = df[df["Category"].isin(categories)]
     if date_range:
         start, end = date_range
         df = df[(df["Date"] >= start) & (df["Date"] <= end)]
@@ -63,6 +70,11 @@ if page == "Dashboard":
             chart_data = exp_df.groupby("Category")["Amount"].sum()
             st.bar_chart(chart_data)
 
+        st.subheader("Income vs Expense Over Time")
+        df_sorted = df.sort_values("Date")
+        pivot = df_sorted.pivot_table(index="Date", columns="Type", values="Amount", aggfunc="sum").fillna(0)
+        st.line_chart(pivot)
+
         st.subheader("All Transactions")
         st.dataframe(df.sort_values("Date", ascending=False))
     else:
@@ -79,6 +91,7 @@ elif page == "Transactions":
         description = st.text_input("Description")
         amount = st.number_input("Amount", min_value=0.0, step=0.01)
         tx_date = st.date_input("Date", value=date.today())
+        recurring = st.checkbox("Recurring monthly transaction")
         
         # Categories
         if tx_type == "Expense":
@@ -96,22 +109,75 @@ elif page == "Transactions":
             elif amount <= 0:
                 st.error("Amount must be greater than 0.")
             else:
-                add_transaction(tx_type, description, amount, category, subcategory, tx_date)
+                add_transaction(tx_type, description, amount, category, subcategory, tx_date, recurring)
                 st.success(f"{tx_type} added: {description} (${amount:.2f})")
+                # Add recurring transaction for next 12 months
+                if recurring:
+                    for i in range(1, 12):
+                        future_date = tx_date + pd.DateOffset(months=i)
+                        add_transaction(tx_type, description, amount, category, subcategory, future_date, recurring=True)
 
     st.subheader("Filter Transactions")
     filter_type = st.selectbox("Type Filter", ["All", "Income", "Expense"])
-    filter_category = st.selectbox("Category Filter", ["All", "Office", "Travel", "Supplies", "Utilities", "Marketing", "Payroll", "Sales", "Services", "Other"])
+    filter_categories = st.multiselect(
+        "Category Filter",
+        ["Office", "Travel", "Supplies", "Utilities", "Marketing", "Payroll", "Sales", "Services", "Other"]
+    )
     start_date = st.date_input("Start Date", value=date(2020, 1, 1))
     end_date = st.date_input("End Date", value=date.today())
 
     filt_type = None if filter_type=="All" else filter_type
-    filt_cat = None if filter_category=="All" else filter_category
+    filt_cat = filter_categories if filter_categories else None
     filtered_df = filter_transactions(filt_type, filt_cat, (start_date, end_date))
 
     if not filtered_df.empty:
         st.dataframe(filtered_df.sort_values("Date", ascending=False))
-        csv = filtered_df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download CSV", csv, "transactions.csv", "text/csv")
+        
+        st.subheader("Edit/Delete Transactions")
+        for idx, row in filtered_df.iterrows():
+            cols = st.columns([2, 2, 1])
+            cols[0].write(f"{row['Date']} | {row['Type']} | {row['Category']} | {row['Description']} | ${row['Amount']:.2f}")
+            if cols[1].button("Edit", key=f"edit_{idx}"):
+                st.session_state.edit_index = idx
+            if cols[2].button("Delete", key=f"delete_{idx}"):
+                delete_transaction(idx)
+                st.experimental_rerun()
+
     else:
         st.info("No transactions match the filter.")
+
+# -------------------------
+# Edit transaction modal
+# -------------------------
+if "edit_index" in st.session_state:
+    idx = st.session_state.edit_index
+    tx = st.session_state.transactions[idx]
+    st.subheader("✏️ Edit Transaction")
+    with st.form("edit_form"):
+        tx_type = st.selectbox("Type", ["Income", "Expense"], index=0 if tx["Type"]=="Income" else 1)
+        description = st.text_input("Description", tx["Description"])
+        amount = st.number_input("Amount", min_value=0.0, step=0.01, value=tx["Amount"])
+        tx_date = st.date_input("Date", value=tx["Date"])
+        recurring = st.checkbox("Recurring monthly transaction", value=tx.get("Recurring", False))
+        
+        if tx_type == "Expense":
+            category = st.selectbox("Category", ["Office", "Travel", "Supplies", "Utilities", "Marketing", "Payroll", "Other"], index=["Office", "Travel", "Supplies", "Utilities", "Marketing", "Payroll", "Other"].index(tx["Category"]))
+            subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""))
+        else:
+            category = st.selectbox("Category", ["Sales", "Services", "Other"], index=["Sales", "Services", "Other"].index(tx["Category"]))
+            subcategory = ""
+        
+        submitted = st.form_submit_button("Save Changes")
+        if submitted:
+            edit_transaction(idx, {
+                "Type": tx_type,
+                "Description": description,
+                "Amount": amount,
+                "Category": category,
+                "Subcategory": subcategory,
+                "Date": tx_date,
+                "Recurring": recurring
+            })
+            st.success("Transaction updated!")
+            del st.session_state.edit_index
+            st.experimental_rerun()
