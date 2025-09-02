@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import date
 
 # -------------------------
-# Initialize session storage
+# Initialize session state
 # -------------------------
 if "transactions" not in st.session_state:
     st.session_state["transactions"] = []
@@ -94,17 +94,17 @@ elif page == "Transactions":
         amount = st.number_input("Amount", min_value=0.0, step=0.01)
         tx_date = st.date_input("Date", value=date.today())
 
-        # Separate containers for Income and Expense categories
-        if tx_type == "Expense":
-            with st.container():
+        # Placeholder for dynamic category/subcategory input
+        input_placeholder = st.empty()
+        with input_placeholder.container():
+            if tx_type == "Expense":
                 category = st.selectbox(
                     "Category",
                     ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
                     key="expense_category"
                 )
                 subcategory = st.text_input("Subcategory (optional)", key="expense_subcategory")
-        else:
-            with st.container():
+            else:
                 category = st.selectbox(
                     "Category",
                     ["Sales", "Services", "Other"],
@@ -125,7 +125,7 @@ elif page == "Transactions":
     st.subheader("Filter Transactions")
     filter_type = st.selectbox("Type Filter", ["All", "Income", "Expense"], key="filter_type")
 
-    # Filter categories depend on type
+    # Filter categories based on type
     if filter_type == "Income":
         filter_categories = st.multiselect(
             "Category Filter",
@@ -145,7 +145,7 @@ elif page == "Transactions":
     start_date = st.date_input("Start Date", value=date(2020, 1, 1))
     end_date = st.date_input("End Date", value=date.today())
 
-    filt_type = None if filter_type == "All" else filter_type
+    filt_type = None if filter_type=="All" else filter_type
     filt_cat = filter_categories if filter_categories else None
     filtered_df = filter_transactions(filt_type, filt_cat, (start_date, end_date))
 
@@ -175,22 +175,25 @@ if st.session_state.edit_index is not None:
         amount = st.number_input("Amount", min_value=0.0, step=0.01, value=tx["Amount"], key="edit_amount")
         tx_date = st.date_input("Date", value=tx["Date"], key="edit_date")
 
-        if tx_type == "Expense":
-            category = st.selectbox(
-                "Category",
-                ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
-                index=["Rent", "Utilities", "Marketing", "Payroll", "Other"].index(tx["Category"]),
-                key="edit_expense_category"
-            )
-            subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_expense_sub")
-        else:
-            category = st.selectbox(
-                "Category",
-                ["Sales", "Services", "Other"],
-                index=["Sales", "Services", "Other"].index(tx["Category"]),
-                key="edit_income_category"
-            )
-            subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_income_sub")
+        # Dynamic category/subcategory in edit form
+        edit_placeholder = st.empty()
+        with edit_placeholder.container():
+            if tx_type == "Expense":
+                category = st.selectbox(
+                    "Category",
+                    ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
+                    index=["Rent", "Utilities", "Marketing", "Payroll", "Other"].index(tx["Category"]),
+                    key="edit_expense_category"
+                )
+                subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_expense_sub")
+            else:
+                category = st.selectbox(
+                    "Category",
+                    ["Sales", "Services", "Other"],
+                    index=["Sales", "Services", "Other"].index(tx["Category"]),
+                    key="edit_income_category"
+                )
+                subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_income_sub")
 
         submitted = st.form_submit_button("Save Changes")
         if submitted:
