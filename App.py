@@ -91,13 +91,21 @@ elif page == "Transactions":
         amount = st.number_input("Amount", min_value=0.0, step=0.01)
         tx_date = st.date_input("Date", value=date.today())
         
-        # Corrected Categories
+        # Corrected: Separate categories and unique keys
         if tx_type == "Expense":
-            category = st.selectbox("Category", ["Rent", "Utilities", "Marketing", "Payroll", "Other"])
-            subcategory = st.text_input("Subcategory (optional)")
+            category = st.selectbox(
+                "Category", 
+                ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
+                key="expense_category"
+            )
+            subcategory = st.text_input("Subcategory (optional)", key="expense_subcategory")
         else:  # Income
-            category = st.selectbox("Category", ["Sales", "Services", "Other"])
-            subcategory = ""
+            category = st.selectbox(
+                "Category", 
+                ["Sales", "Services", "Other"],
+                key="income_category"
+            )
+            subcategory = st.text_input("Subcategory (optional)", key="income_subcategory")
         
         submitted = st.form_submit_button("Add Transaction")
         
@@ -112,10 +120,24 @@ elif page == "Transactions":
 
     st.subheader("Filter Transactions")
     filter_type = st.selectbox("Type Filter", ["All", "Income", "Expense"])
-    filter_categories = st.multiselect(
-        "Category Filter",
-        ["Rent", "Utilities", "Marketing", "Payroll", "Sales", "Services", "Other"]
-    )
+    
+    # Filter categories depend on type
+    if filter_type == "Income":
+        filter_categories = st.multiselect(
+            "Category Filter",
+            ["Sales", "Services", "Other"]
+        )
+    elif filter_type == "Expense":
+        filter_categories = st.multiselect(
+            "Category Filter",
+            ["Rent", "Utilities", "Marketing", "Payroll", "Other"]
+        )
+    else:
+        filter_categories = st.multiselect(
+            "Category Filter",
+            ["Rent", "Utilities", "Marketing", "Payroll", "Sales", "Services", "Other"]
+        )
+    
     start_date = st.date_input("Start Date", value=date(2020, 1, 1))
     end_date = st.date_input("End Date", value=date.today())
 
@@ -155,14 +177,14 @@ if "edit_index" in st.session_state:
                 ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
                 index=["Rent", "Utilities", "Marketing", "Payroll", "Other"].index(tx["Category"])
             )
-            subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""))
+            subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_expense_sub")
         else:
             category = st.selectbox(
                 "Category",
                 ["Sales", "Services", "Other"],
                 index=["Sales", "Services", "Other"].index(tx["Category"])
             )
-            subcategory = ""
+            subcategory = st.text_input("Subcategory (optional)", "", key="edit_income_sub")
         
         submitted = st.form_submit_button("Save Changes")
         if submitted:
