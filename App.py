@@ -31,35 +31,48 @@ def edit_transaction(index, tx):
 def delete_transaction(index):
     st.session_state.transactions.pop(index)
 
-def filter_transactions(tx_type=None, categories=None, subcategories=None, keyword=None, date_range=None):
-    df = pd.DataFrame(st.session_state.transactions)
+def filter_transactions(tx_type=None, categories=None, keyword=None, date_range=None):
+    df = calculate_running_balance()
     if df.empty:
         return df
     if tx_type:
         df = df[df["Type"] == tx_type]
     if categories:
         df = df[df["Category"].isin(categories)]
-    if subcategories:
-        df = df[df["Subcategory"].isin(subcategories)]
     if keyword:
-        df = df[df["Description"].str.contains(keyword, case=False, na=False)]
+        df = df[df["Description"].str.contains(keyword, case=False, na=False) |
+                df["Notes"].str.contains(keyword, case=False, na=False)]
     if date_range:
         start, end = date_range
-        df = df[(df["Date"] >= start) & (df["Date"] <= end)]
+        df = df[(df["Date"] >= pd.to_datetime(start)) & (df["Date"] <= pd.to_datetime(end))]
     return df
 
 def calculate_running_balance():
-    df = pd.DataFrame(st.session_state.transactions).sort_values("Date")
+    # Ensure consistent columns
+    columns = ["Type", "Description", "Amount", "Category", "Subcategory", "Date", "Notes"]
+    tx_list = []
+    for tx in st.session_state.transactions:
+        clean_tx = {col: tx.get(col, "" if col != "Amount" else 0) for col in columns}
+        if not clean_tx["Date"]:
+            clean_tx["Date"] = date.today()  # default to today
+        tx_list.append(clean_tx)
+
+    df = pd.DataFrame(tx_list)
+    if df.empty:
+        return df
+
+    # Ensure Date column is datetime
+    df["Date"] = pd.to_datetime(df["Date"])
+    
     balance = 0
     balances = []
-    for _, row in df.iterrows():
+    for _, row in df.sort_values("Date").iterrows():
         if row["Type"] == "Income":
             balance += row["Amount"]
         else:
             balance -= row["Amount"]
         balances.append(balance)
-    if not df.empty:
-        df["Running Balance"] = balances
+    df["Running Balance"] = balances
     return df
 
 # -------------------------
@@ -117,7 +130,6 @@ elif page == "Transactions":
             description = st.text_input("Description", key="expense_desc")
             amount = st.number_input("Amount", min_value=0.0, step=0.01, key="expense_amount")
             tx_date = st.date_input("Date", value=date.today(), key="expense_date")
-            # Allow custom categories
             default_categories = ["Rent", "Utilities", "Marketing", "Payroll", "Other"]
             category = st.selectbox("Category", default_categories, key="expense_category")
             custom_cat = st.text_input("Or type a custom category", key="expense_custom_cat")
@@ -143,7 +155,6 @@ elif page == "Transactions":
             description = st.text_input("Description", key="income_desc")
             amount = st.number_input("Amount", min_value=0.0, step=0.01, key="income_amount")
             tx_date = st.date_input("Date", value=date.today(), key="income_date")
-            # Allow custom categories
             default_categories = ["Sales", "Services", "Other"]
             category = st.selectbox("Category", default_categories, key="income_category")
             custom_cat = st.text_input("Or type a custom category", key="income_custom_cat")
@@ -197,7 +208,7 @@ elif page == "Transactions":
         st.subheader("Edit/Delete Transactions")
         for idx, row in filtered_df.iterrows():
             cols = st.columns([3, 1, 1])
-            cols[0].write(f"{row['Date']} | {row['Type']} | {row['Category']} | {row['Description']} | ${row['Amount']:.2f}")
+            cols[0].write(f"{row['Date'].date()} | {row['Type']} | {row['Category']} | {row['Description']} | ${row['Amount']:.2f}")
             if cols[1].button("Edit", key=f"edit_{idx}"):
                 st.session_state.edit_index = idx
             if cols[2].button("Delete", key=f"delete_{idx}"):
@@ -217,7 +228,6 @@ if st.session_state.edit_index is not None:
         amount = st.number_input("Amount", min_value=0.0, step=0.01, value=tx["Amount"], key="edit_amount")
         tx_date = st.date_input("Date", value=tx["Date"], key="edit_date")
 
-        # Custom categories in edit
         if tx_type == "Expense":
             default_categories = ["Rent", "Utilities", "Marketing", "Payroll", "Other"]
             category = st.selectbox(
