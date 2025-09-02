@@ -14,14 +14,15 @@ if "edit_index" not in st.session_state:
 # -------------------------
 # Helper functions
 # -------------------------
-def add_transaction(tx_type, description, amount, category, subcategory, tx_date):
+def add_transaction(tx_type, description, amount, category, subcategory, tx_date, notes):
     st.session_state.transactions.append({
         "Type": tx_type,
         "Description": description,
         "Amount": amount,
         "Category": category,
         "Subcategory": subcategory,
-        "Date": tx_date
+        "Date": tx_date,
+        "Notes": notes
     })
 
 def edit_transaction(index, tx):
@@ -30,7 +31,7 @@ def edit_transaction(index, tx):
 def delete_transaction(index):
     st.session_state.transactions.pop(index)
 
-def filter_transactions(tx_type=None, categories=None, date_range=None):
+def filter_transactions(tx_type=None, categories=None, subcategories=None, keyword=None, date_range=None):
     df = pd.DataFrame(st.session_state.transactions)
     if df.empty:
         return df
@@ -38,9 +39,27 @@ def filter_transactions(tx_type=None, categories=None, date_range=None):
         df = df[df["Type"] == tx_type]
     if categories:
         df = df[df["Category"].isin(categories)]
+    if subcategories:
+        df = df[df["Subcategory"].isin(subcategories)]
+    if keyword:
+        df = df[df["Description"].str.contains(keyword, case=False, na=False)]
     if date_range:
         start, end = date_range
         df = df[(df["Date"] >= start) & (df["Date"] <= end)]
+    return df
+
+def calculate_running_balance():
+    df = pd.DataFrame(st.session_state.transactions).sort_values("Date")
+    balance = 0
+    balances = []
+    for _, row in df.iterrows():
+        if row["Type"] == "Income":
+            balance += row["Amount"]
+        else:
+            balance -= row["Amount"]
+        balances.append(balance)
+    if not df.empty:
+        df["Running Balance"] = balances
     return df
 
 # -------------------------
@@ -54,7 +73,7 @@ page = st.sidebar.radio("Go to", ["Dashboard", "Transactions"])
 # -------------------------
 if page == "Dashboard":
     st.title("📊 Dashboard")
-    df = pd.DataFrame(st.session_state.transactions)
+    df = calculate_running_balance()
     
     if not df.empty:
         total_income = df[df["Type"]=="Income"]["Amount"].sum()
@@ -77,7 +96,7 @@ if page == "Dashboard":
         pivot = df_sorted.pivot_table(index="Date", columns="Type", values="Amount", aggfunc="sum").fillna(0)
         st.line_chart(pivot)
 
-        st.subheader("All Transactions")
+        st.subheader("All Transactions with Running Balance")
         st.dataframe(df.sort_values("Date", ascending=False))
     else:
         st.info("No transactions yet.")
@@ -98,12 +117,14 @@ elif page == "Transactions":
             description = st.text_input("Description", key="expense_desc")
             amount = st.number_input("Amount", min_value=0.0, step=0.01, key="expense_amount")
             tx_date = st.date_input("Date", value=date.today(), key="expense_date")
-            category = st.selectbox(
-                "Category",
-                ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
-                key="expense_category"
-            )
+            # Allow custom categories
+            default_categories = ["Rent", "Utilities", "Marketing", "Payroll", "Other"]
+            category = st.selectbox("Category", default_categories, key="expense_category")
+            custom_cat = st.text_input("Or type a custom category", key="expense_custom_cat")
+            if custom_cat.strip():
+                category = custom_cat.strip()
             subcategory = st.text_input("Subcategory (optional)", key="expense_subcategory")
+            notes = st.text_area("Notes (optional)", key="expense_notes")
             submitted = st.form_submit_button("Add Expense")
             if submitted:
                 if not description:
@@ -111,7 +132,7 @@ elif page == "Transactions":
                 elif amount <= 0:
                     st.error("Amount must be greater than 0.")
                 else:
-                    add_transaction("Expense", description, amount, category, subcategory, tx_date)
+                    add_transaction("Expense", description, amount, category, subcategory, tx_date, notes)
                     st.success(f"Expense added: {description} (${amount:.2f})")
 
     # -------------------------
@@ -122,12 +143,14 @@ elif page == "Transactions":
             description = st.text_input("Description", key="income_desc")
             amount = st.number_input("Amount", min_value=0.0, step=0.01, key="income_amount")
             tx_date = st.date_input("Date", value=date.today(), key="income_date")
-            category = st.selectbox(
-                "Category",
-                ["Sales", "Services", "Other"],
-                key="income_category"
-            )
+            # Allow custom categories
+            default_categories = ["Sales", "Services", "Other"]
+            category = st.selectbox("Category", default_categories, key="income_category")
+            custom_cat = st.text_input("Or type a custom category", key="income_custom_cat")
+            if custom_cat.strip():
+                category = custom_cat.strip()
             subcategory = st.text_input("Subcategory (optional)", key="income_subcategory")
+            notes = st.text_area("Notes (optional)", key="income_notes")
             submitted = st.form_submit_button("Add Income")
             if submitted:
                 if not description:
@@ -135,7 +158,7 @@ elif page == "Transactions":
                 elif amount <= 0:
                     st.error("Amount must be greater than 0.")
                 else:
-                    add_transaction("Income", description, amount, category, subcategory, tx_date)
+                    add_transaction("Income", description, amount, category, subcategory, tx_date, notes)
                     st.success(f"Income added: {description} (${amount:.2f})")
 
     # -------------------------
@@ -143,6 +166,7 @@ elif page == "Transactions":
     # -------------------------
     st.subheader("Filter Transactions")
     filter_type = st.selectbox("Type Filter", ["All", "Income", "Expense"], key="filter_type")
+    keyword = st.text_input("Search Description / Notes", key="filter_keyword")
 
     if filter_type == "Income":
         filter_categories = st.multiselect(
@@ -165,7 +189,7 @@ elif page == "Transactions":
 
     filt_type = None if filter_type=="All" else filter_type
     filt_cat = filter_categories if filter_categories else None
-    filtered_df = filter_transactions(filt_type, filt_cat, (start_date, end_date))
+    filtered_df = filter_transactions(filt_type, filt_cat, keyword, (start_date, end_date))
 
     if not filtered_df.empty:
         st.dataframe(filtered_df.sort_values("Date", ascending=False))
@@ -193,22 +217,33 @@ if st.session_state.edit_index is not None:
         amount = st.number_input("Amount", min_value=0.0, step=0.01, value=tx["Amount"], key="edit_amount")
         tx_date = st.date_input("Date", value=tx["Date"], key="edit_date")
 
+        # Custom categories in edit
         if tx_type == "Expense":
+            default_categories = ["Rent", "Utilities", "Marketing", "Payroll", "Other"]
             category = st.selectbox(
                 "Category",
-                ["Rent", "Utilities", "Marketing", "Payroll", "Other"],
-                index=["Rent", "Utilities", "Marketing", "Payroll", "Other"].index(tx["Category"]),
+                default_categories,
+                index=default_categories.index(tx["Category"]) if tx["Category"] in default_categories else 0,
                 key="edit_expense_category"
             )
+            custom_cat = st.text_input("Or type a custom category", tx["Category"] if tx["Category"] not in default_categories else "", key="edit_expense_custom")
+            if custom_cat.strip():
+                category = custom_cat.strip()
             subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_expense_sub")
         else:
+            default_categories = ["Sales", "Services", "Other"]
             category = st.selectbox(
                 "Category",
-                ["Sales", "Services", "Other"],
-                index=["Sales", "Services", "Other"].index(tx["Category"]),
+                default_categories,
+                index=default_categories.index(tx["Category"]) if tx["Category"] in default_categories else 0,
                 key="edit_income_category"
             )
+            custom_cat = st.text_input("Or type a custom category", tx["Category"] if tx["Category"] not in default_categories else "", key="edit_income_custom")
+            if custom_cat.strip():
+                category = custom_cat.strip()
             subcategory = st.text_input("Subcategory (optional)", tx.get("Subcategory", ""), key="edit_income_sub")
+
+        notes = st.text_area("Notes (optional)", tx.get("Notes", ""), key="edit_notes")
 
         submitted = st.form_submit_button("Save Changes")
         if submitted:
@@ -218,7 +253,8 @@ if st.session_state.edit_index is not None:
                 "Amount": amount,
                 "Category": category,
                 "Subcategory": subcategory,
-                "Date": tx_date
+                "Date": tx_date,
+                "Notes": notes
             })
             st.success("Transaction updated!")
             st.session_state.edit_index = None
