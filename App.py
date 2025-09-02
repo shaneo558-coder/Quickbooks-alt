@@ -1,8 +1,8 @@
-# accounting_app.py
+# App.py
 # A simple MVP for a service-based accounting app using Streamlit.
 # Focuses on easy expense and income tracking with a clean, Apple-like UI.
 # Uses SQLite for data persistence.
-# Run with: streamlit run accounting_app.py
+# Run with: streamlit run App.py
 
 import streamlit as st
 import pandas as pd
@@ -58,7 +58,49 @@ st.set_page_config(page_title="Simple Accounting", page_icon="📊", layout="wid
 
 # Custom CSS for Apple-like clean UI
 st.markdown("""
-    
+    <style>
+    /* General styling */
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: #1c1e21;
+    }
+    .stApp {
+        background-color: #f5f5f7;
+    }
+    /* Buttons */
+    .stButton > button {
+        background-color: #007aff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 20px;
+        font-size: 16px;
+        font-weight: 600;
+        transition: background-color 0.3s;
+    }
+    .stButton > button:hover {
+        background-color: #0062cc;
+    }
+    /* Text inputs */
+    .stTextInput > div > div > input {
+        border: 1px solid #d2d2d7;
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 16px;
+    }
+    /* Select boxes */
+    .stSelectbox > div > div > select {
+        border: 1px solid #d2d2d7;
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 16px;
+    }
+    /* Headers */
+    h1, h2, h3 {
+        color: #1c1e21;
+        font-weight: 600;
+    }
+    </style>
 """, unsafe_allow_html=True)
 
 # Sidebar for navigation
@@ -71,21 +113,11 @@ if page == "Dashboard":
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown('
-Total Income
-${:.2f}
-'.format(summary["income"]), unsafe_allow_html=True)
+        st.metric("Total Income", f"${summary['income']:.2f}", delta=None)
     with col2:
-        st.markdown('
-Total Expenses
-${:.2f}
-'.format(summary["expenses"]), unsafe_allow_html=True)
+        st.metric("Total Expenses", f"${summary['expenses']:.2f}", delta=None)
     with col3:
-        color = "#34c759" if summary["balance"] >= 0 else "#ff3b30"
-        st.markdown('
-Balance
-${:.2f}
-'.format(color, summary["balance"]), unsafe_allow_html=True)
+        st.metric("Balance", f"${summary['balance']:.2f}", delta=None, delta_color="normal" if summary["balance"] >= 0 else "inverse")
 
     st.subheader("Recent Transactions")
     df = get_transactions().head(5)
