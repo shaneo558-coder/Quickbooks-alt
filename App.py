@@ -1,212 +1,162 @@
+# accounting_app.py
+# A simple MVP for a service-based accounting app using Streamlit.
+# Focuses on easy expense and income tracking with a clean, Apple-like UI.
+# Uses SQLite for data persistence.
+# Run with: streamlit run accounting_app.py
+
 import streamlit as st
-from datetime import date
 import pandas as pd
-from io import BytesIO
+import sqlite3
+from datetime import datetime
+import matplotlib.pyplot as plt
 
-# Initialize session state for all data
-if "clients" not in st.session_state:
-    st.session_state["clients"] = []
-if "projects" not in st.session_state:
-    st.session_state["projects"] = []
-if "invoices" not in st.session_state:
-    st.session_state["invoices"] = []
-if "transactions" not in st.session_state:
-    st.session_state["transactions"] = []
+# Database setup
+DB_NAME = "accounting.db"
 
-# --- Data Management Functions ---
-def add_client(name, email):
-    st.session_state.clients.append({"Name": name, "Email": email})
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS transactions
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  type TEXT NOT NULL,
+                  amount REAL NOT NULL,
+                  category TEXT,
+                  description TEXT,
+                  date TEXT NOT NULL)''')
+    conn.commit()
+    conn.close()
 
-def add_project(name, client_id):
-    st.session_state.projects.append({"Name": name, "Client ID": client_id})
+init_db()
 
-def add_invoice(project_id, amount, due_date):
-    st.session_state.invoices.append({
-        "Project ID": project_id,
-        "Amount": amount,
-        "Due Date": due_date,
-        "Status": "Outstanding"
-    })
+# Helper functions
+def add_transaction(t_type, amount, category, description):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c.execute("INSERT INTO transactions (type, amount, category, description, date) VALUES (?, ?, ?, ?, ?)",
+              (t_type, amount, category, description, date))
+    conn.commit()
+    conn.close()
 
-def add_transaction(tx_type, description, amount, tx_date):
-    st.session_state.transactions.append({
-        "Type": tx_type,
-        "Description": description,
-        "Amount": amount,
-        "Date": tx_date
-    })
-
-def calculate_running_balance():
-    df = pd.DataFrame(st.session_state.transactions)
-    if df.empty:
-        return df
-    df["Date"] = pd.to_datetime(df["Date"])
-    balance = 0
-    balances = []
-    df = df.sort_values(by=["Date", "Type"], ascending=[True, False])
-    for _, row in df.iterrows():
-        if row["Type"] == "Income":
-            balance += row["Amount"]
-        else:
-            balance -= row["Amount"]
-        balances.append(balance)
-    df["Running Balance"] = balances
+def get_transactions():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("SELECT * FROM transactions ORDER BY date DESC", conn)
+    conn.close()
     return df
 
-@st.cache_data
-def convert_df_to_excel(df):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Transactions')
-    processed_data = output.getvalue()
-    return processed_data
+def get_summary():
+    df = get_transactions()
+    if df.empty:
+        return {"income": 0, "expenses": 0, "balance": 0}
+    income = df[df['type'] == 'Income']['amount'].sum()
+    expenses = df[df['type'] == 'Expense']['amount'].sum()
+    balance = income - expenses
+    return {"income": income, "expenses": expenses, "balance": balance}
 
-# --- Sidebar Navigation ---
-page = st.sidebar.radio(
-    "Go to", 
-    ["Dashboard", "Clients & Projects", "Invoicing", "Record Transaction"]
-)
+# Streamlit app configuration
+st.set_page_config(page_title="Simple Accounting", page_icon="📊", layout="wide")
 
-# --- Page: Dashboard ---
+# Custom CSS for Apple-like clean UI
+st.markdown("""
+    
+""", unsafe_allow_html=True)
+
+# Sidebar for navigation
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Go to", ["Dashboard", "Add Income", "Add Expense", "Transactions", "Reports"])
+
 if page == "Dashboard":
-    st.title("Your Cash Flow at a Glance 📊")
-    df = calculate_running_balance()
-
-    if not df.empty:
-        total_income = df[df["Type"]=="Income"]["Amount"].sum()
-        total_expense = df[df["Type"]=="Expense"]["Amount"].sum()
-        net = total_income - total_expense
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Income", f"${total_income:.2f}")
-        col2.metric("Total Expenses", f"${total_expense:.2f}")
-        col3.metric("Net Cash Flow", f"${net:.2f}")
-        
-        st.subheader("Outstanding Invoices 💰")
-        invoices_df = pd.DataFrame(st.session_state.invoices)
-        if not invoices_df.empty:
-            outstanding_invoices = invoices_df[invoices_df["Status"] == "Outstanding"]
-            st.dataframe(outstanding_invoices)
-            st.metric("Total Due", f"${outstanding_invoices['Amount'].sum():.2f}")
-        else:
-            st.info("No outstanding invoices.")
-
-        st.subheader("Recent Transactions")
-        st.dataframe(df.sort_values("Date", ascending=False).head(5))
-
-    else:
-        st.info("Start by adding your first transaction.")
-
----
-### 2. Page: Clients & Projects
-
-elif page == "Clients & Projects":
-    st.title("Client & Project Management 👤")
-    st.markdown("Add and manage your clients and the projects you work on for them.")
+    st.title("Dashboard")
+    summary = get_summary()
     
-    col1, col2 = st.columns(2)
-    
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.subheader("Add a New Client")
-        with st.form("client_form"):
-            name = st.text_input("Client Name")
-            email = st.text_input("Client Email")
-            if st.form_submit_button("Add Client"):
-                if name:
-                    add_client(name, email)
-                    st.success(f"Client '{name}' added!")
-                else:
-                    st.error("Client name is required.")
-    
+        st.markdown('
+Total Income
+${:.2f}
+'.format(summary["income"]), unsafe_allow_html=True)
     with col2:
-        st.subheader("Add a New Project")
-        with st.form("project_form"):
-            client_options = [c["Name"] for c in st.session_state.clients]
-            selected_client = st.selectbox("Select Client", [""] + client_options)
-            project_name = st.text_input("Project Name")
-            if st.form_submit_button("Add Project"):
-                if project_name and selected_client:
-                    client_id = client_options.index(selected_client)
-                    add_project(project_name, client_id)
-                    st.success(f"Project '{project_name}' for '{selected_client}' added!")
-                else:
-                    st.error("Project name and client are required.")
-    
-    st.subheader("Your Clients")
-    if st.session_state.clients:
-        st.dataframe(pd.DataFrame(st.session_state.clients))
+        st.markdown('
+Total Expenses
+${:.2f}
+'.format(summary["expenses"]), unsafe_allow_html=True)
+    with col3:
+        color = "#34c759" if summary["balance"] >= 0 else "#ff3b30"
+        st.markdown('
+Balance
+${:.2f}
+'.format(color, summary["balance"]), unsafe_allow_html=True)
+
+    st.subheader("Recent Transactions")
+    df = get_transactions().head(5)
+    if not df.empty:
+        st.dataframe(df[["type", "amount", "category", "date"]].style.format({"amount": "${:.2f}"}))
     else:
-        st.info("No clients added yet.")
+        st.info("No transactions yet. Add some income or expenses to get started.")
 
-    st.subheader("Your Projects")
-    if st.session_state.projects:
-        projects_df = pd.DataFrame(st.session_state.projects)
-        clients_df = pd.DataFrame(st.session_state.clients)
-        projects_df["Client"] = projects_df["Client ID"].apply(lambda x: clients_df.loc[x, "Name"])
-        st.dataframe(projects_df.drop("Client ID", axis=1))
+elif page == "Add Income":
+    st.title("Add Income")
+    with st.form("income_form"):
+        amount = st.number_input("Amount", min_value=0.01, step=0.01)
+        category = st.selectbox("Category", ["Service Revenue", "Freelance", "Salary", "Other"])
+        description = st.text_input("Description (optional)")
+        submitted = st.form_submit_button("Add Income")
+        if submitted:
+            add_transaction("Income", amount, category, description)
+            st.success("Income added successfully!")
+
+elif page == "Add Expense":
+    st.title("Add Expense")
+    with st.form("expense_form"):
+        amount = st.number_input("Amount", min_value=0.01, step=0.01)
+        category = st.selectbox("Category", ["Marketing", "Supplies", "Rent", "Utilities", "Other"])
+        description = st.text_input("Description (optional)")
+        submitted = st.form_submit_button("Add Expense")
+        if submitted:
+            add_transaction("Expense", amount, category, description)
+            st.success("Expense added successfully!")
+
+elif page == "Transactions":
+    st.title("All Transactions")
+    df = get_transactions()
+    if not df.empty:
+        st.dataframe(df[["type", "amount", "category", "description", "date"]].style.format({"amount": "${:.2f}"}))
     else:
-        st.info("No projects added yet.")
+        st.info("No transactions yet.")
 
----
-### 3. Page: Invoicing
-
-elif page == "Invoicing":
-    st.title("Create Invoice 📝")
-    st.markdown("Create and manage invoices for your projects.")
-    
-    with st.form("invoice_form"):
-        project_options = [p["Name"] for p in st.session_state.projects]
-        selected_project = st.selectbox("Select Project", [""] + project_options)
-        invoice_amount = st.number_input("Amount ($)", min_value=0.0, step=0.01)
-        invoice_due_date = st.date_input("Due Date", value=date.today())
-        
-        submitted = st.form_submit_button("Create Invoice")
-    
-    if submitted:
-        if not selected_project:
-            st.error("You must select a project.")
-        elif invoice_amount <= 0:
-            st.error("Amount must be greater than zero.")
-        else:
-            project_id = project_options.index(selected_project)
-            add_invoice(project_id, invoice_amount, invoice_due_date)
-            st.success(f"Invoice for project '{selected_project}' created successfully!")
-            
-    st.subheader("Your Invoices")
-    invoices_df = pd.DataFrame(st.session_state.invoices)
-    if not invoices_df.empty:
-        projects_df = pd.DataFrame(st.session_state.projects)
-        invoices_df["Project"] = invoices_df["Project ID"].apply(lambda x: projects_df.loc[x, "Name"])
-        st.dataframe(invoices_df.drop("Project ID", axis=1))
+elif page == "Reports":
+    st.title("Reports")
+    df = get_transactions()
+    if df.empty:
+        st.info("No data available for reports.")
     else:
-        st.info("No invoices created yet.")
-
----
-### 4. Page: Record Transaction
-
-elif page == "Record Transaction":
-    st.title("Record Transaction ✍️")
-    st.markdown("Easily add income or expenses to track your cash flow.")
-    
-    with st.form("transaction_form"):
-        tx_type = st.radio("Type", ["Income", "Expense"], horizontal=True)
-        description = st.text_input("Description (e.g., 'Project Alpha Payment', 'Office Supplies')")
-        amount = st.number_input("Amount", min_value=0.0, step=0.01)
-        tx_date = st.date_input("Date", value=date.today())
+        df['date'] = pd.to_datetime(df['date'])
+        df['month'] = df['date'].dt.to_period('M')
         
-        submitted = st.form_submit_button("Add Transaction")
+        monthly_summary = df.groupby(['month', 'type'])['amount'].sum().unstack().fillna(0)
+        monthly_summary['balance'] = monthly_summary.get('Income', 0) - monthly_summary.get('Expense', 0)
         
-    if submitted:
-        if not description:
-            st.error("Description is required.")
-        elif amount <= 0:
-            st.error("Amount must be greater than zero.")
-        else:
-            add_transaction(tx_type, description, amount, tx_date)
-            st.success(f"🎉 {tx_type} added: '{description}' worth ${amount:.2f}")
-
-This video provides a great tutorial on building a professional business analytics dashboard using Streamlit, which can help you understand how to structure your app for a business context.
-https://www.youtube.com/watch?v=sIqBA0PhzGQ
-http://googleusercontent.com/youtube_content/0 *YouTube video views will be stored in your YouTube History, and your data will be stored and used by YouTube according to its [Terms of Service](https://www.youtube.com/static?template=terms)*
-
-
+        st.subheader("Monthly Summary")
+        st.dataframe(monthly_summary.style.format("${:.2f}"))
+        
+        st.subheader("Income vs Expenses")
+        fig, ax = plt.subplots()
+        monthly_summary[['Income', 'Expense']].plot(kind='bar', ax=ax)
+        ax.set_ylabel("Amount ($)")
+        ax.set_title("Monthly Income and Expenses")
+        st.pyplot(fig)
+        
+        st.subheader("Category Breakdown")
+        expense_by_cat = df[df['type'] == 'Expense'].groupby('category')['amount'].sum()
+        if not expense_by_cat.empty:
+            fig2, ax2 = plt.subplots()
+            expense_by_cat.plot(kind='pie', ax=ax2, autopct='%1.1f%%')
+            ax2.set_title("Expenses by Category")
+            st.pyplot(fig2)
+        
+        income_by_cat = df[df['type'] == 'Income'].groupby('category')['amount'].sum()
+        if not income_by_cat.empty:
+            fig3, ax3 = plt.subplots()
+            income_by_cat.plot(kind='pie', ax=ax3, autopct='%1.1f%%')
+            ax3.set_title("Income by Category")
+            st.pyplot(fig3)
